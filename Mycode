@@ -1,0 +1,112 @@
+import cv2
+import face_recognition
+import os
+import numpy as np
+import tkinter
+import tkinter.messagebox
+import time
+import smtplib  #SMPT (simple mail transfer protocol) client session object that can be used to send mail to any internet machine with an SMPT daemon
+import imghdr
+from email.message import EmailMessage
+from playsound import playsound
+
+def Email():
+    msg = EmailMessage()  #Email object is create to introduce Emailmsg
+    smtp_server = "smtp.gmail.com"
+    # sender mail and password
+    s_e = "srinadhreddy963@gmail.com"
+    p = 'xxxxxxxxxx'
+    # receiver mail
+    r_e = "rakeshchari0102@gmail.com"
+    # message to be send
+    mes = "Some one accessed you vehicle"
+    #
+    msg['Subject'] = 'Alert'
+    msg['From'] = s_e
+    msg['To'] = r_e
+    msg.set_content("SOME ONE ACCESS YOUR VECHILE !!!!")
+
+    with open('Frame1.jpg', 'rb') as f:
+        image_data = f.read()     #reading image from the directory
+        image_type = imghdr.what(f.name)   #using imghdr module determine the type of image contained in file or byte stream
+        image_name = f.name   #extract file name
+        # print(image_type)
+    msg.add_attachment(image_data, maintype='image', subtype=image_type, filename=image_name) #attaching image to the content
+    with smtplib.SMTP_SSL(smtp_server, 465) as server:
+        server.login(s_e, p)
+        # server.sendmail(s_e,r_e,mes)
+        server.send_message(msg)
+def RemoveImg():
+    os.remove("C:\\Users\\jeswa\\PycharmProjects\\RakeshPro\\Frame1.jpg")
+
+
+
+#----------------------------------main function---------------------------------------------
+tk = tkinter.Tk()           #GUI   - Creating application window
+tk.title("DISPLAY WINDOW")
+
+path= 'images'
+image =[]
+personName= []
+myList = os.listdir(path)
+for cur_img in myList:
+    current_img=cv2.imread(f'{path}/{cur_img}')
+    image.append(current_img)
+    personName.append(os.path.splitext(cur_img)[0])
+#print(image)
+#print(personName)
+
+def faceEncodings(image):  # face_recognition depends on dlib...dlib ecodes 128 unique points on face..which makes unique
+    encodeList=[]
+    for img in image:
+        img=cv2.cvtColor(img,cv2.COLOR_BGR2RGB)
+        #cv2.imshow('BGR Image',img)
+        encode=face_recognition.face_encodings(img)[0]
+        encodeList.append(encode)
+    return encodeList
+
+encodeListknown = faceEncodings(image)
+#print(encodeListknown)
+
+cap = cv2.VideoCapture(0)
+t_end =time.time() + 3
+t=True
+i=1
+while t and time.time() < t_end :
+    ret,frame = cap.read()
+    faces = cv2.resize(frame,(0,0), None,0.25 ,0.25)
+    cv2.imwrite('Frame'+str(i)+'.jpg',faces)
+    faces=cv2.cvtColor(faces,cv2.COLOR_BGR2RGB)
+    facesCurrentFrame=face_recognition.face_locations(faces)
+    encodesCurrentFrame= face_recognition.face_encodings(faces,facesCurrentFrame)
+
+    for encodeFace , faceLoc in zip(encodesCurrentFrame,facesCurrentFrame):
+        matches=face_recognition.compare_faces(encodeListknown,encodeFace)
+        faceDis =face_recognition.face_distance(encodeListknown,encodeFace)
+        matchIndex =np.argmin(faceDis) #min distance index
+        if matches[matchIndex]:
+            name=personName[matchIndex].upper()
+            t=False
+        else:
+            name="UNKNOWN PERSON"
+
+        y1, x2, y2, x1 = faceLoc
+        y1, x2, y2, x1 = y1 * 4, x2 * 4, y2 * 4, x1 * 4
+        cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 255, 0), 2)
+        cv2.rectangle(frame, (x1, y2 - 35), (x2, y2), (0, 255, 0), cv2.FILLED)
+        cv2.putText(frame, name, (x1 + 6, y2 - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (0, 0, 255), 2)
+    cv2.imshow("camera",frame)
+    if cv2.waitKey(1) == 27 :  #10 sec acise key
+        break
+if t:
+    Email()
+    RemoveImg()
+    playsound("C:\\Users\\jeswa\\PycharmProjects\\RakeshPro\\sounds\\New folder\\datanotfound.mp3")
+    tkinter.messagebox.showinfo("DATA ERROR", "RETRY \n DOOR LOCKED")
+else:
+    playsound("C:\\Users\\jeswa\\PycharmProjects\\RakeshPro\\sounds\\hiihellowelcome.mp3")
+    RemoveImg()
+    tkinter.messagebox.showinfo("HELLO WELCOME", "VECHILE DOOR UNLOCK")
+
+cap.release()
+cv2.destroyAllWindows()
